@@ -17,8 +17,8 @@ TODO: consider slightly revising these tests to make sure they're complete. {
     - }
 `;import { Fixture } from '../../../common/framework/fixture.js';
 import { makeTestGroup } from '../../../common/framework/test_group.js';
-import { assert, raceWithRejectOnTimeout } from '../../../common/framework/util/util.js';
-import { getGPU } from '../../util/navigator_gpu.js';
+import { getGPU } from '../../../common/util/navigator_gpu.js';
+import { assert, raceWithRejectOnTimeout } from '../../../common/util/util.js';
 
 class F extends Fixture {
   _device = undefined;
@@ -43,7 +43,7 @@ class F extends Fixture {
       size: 1024,
       usage: 0xffff // Invalid GPUBufferUsage
     });
-    // TODO: Remove when chrome does it automatically.
+    // MAINTENANCE_TODO: This is a workaround for Chromium not flushing. Remove when not needed.
     this.device.queue.submit([]);
   }
 
@@ -51,11 +51,11 @@ class F extends Fixture {
   // otherwise it could erroneously pass by capturing an error from later in the test.
   async expectUncapturedError(fn) {
     return this.immediateAsyncExpectation(() => {
-      // TODO: Make arbitrary timeout value a test runner variable
+      // MAINTENANCE_TODO: Make arbitrary timeout value a test runner variable
       const TIMEOUT_IN_MS = 1000;
 
-      const promise = new Promise(resolve => {
-        const eventListener = event => {
+      const promise = new Promise((resolve) => {
+        const eventListener = (event) => {
           this.debug(`Got uncaptured error event with ${event.error}`);
           resolve(event);
         };
@@ -76,7 +76,7 @@ class F extends Fixture {
 
 export const g = makeTestGroup(F);
 
-g.test('simple_case_where_the_error_scope_catches_an_error').fn(async t => {
+g.test('simple_case_where_the_error_scope_catches_an_error').fn(async (t) => {
   t.device.pushErrorScope('validation');
 
   t.createErrorBuffer();
@@ -85,7 +85,7 @@ g.test('simple_case_where_the_error_scope_catches_an_error').fn(async t => {
   t.expect(error instanceof GPUValidationError);
 });
 
-g.test('errors_bubble_to_the_parent_scope_if_not_handled_by_the_current_scope').fn(async t => {
+g.test('errors_bubble_to_the_parent_scope_if_not_handled_by_the_current_scope').fn(async (t) => {
   t.device.pushErrorScope('validation');
   t.device.pushErrorScope('out-of-memory');
 
@@ -101,7 +101,7 @@ g.test('errors_bubble_to_the_parent_scope_if_not_handled_by_the_current_scope').
   }
 });
 
-g.test('if_an_error_scope_matches_an_error_it_does_not_bubble_to_the_parent_scope').fn(async t => {
+g.test('if_an_error_scope_matches_an_error_it_does_not_bubble_to_the_parent_scope').fn(async (t) => {
   t.device.pushErrorScope('validation');
   t.device.pushErrorScope('validation');
 
@@ -117,7 +117,7 @@ g.test('if_an_error_scope_matches_an_error_it_does_not_bubble_to_the_parent_scop
   }
 });
 
-g.test('if_no_error_scope_handles_an_error_it_fires_an_uncapturederror_event').fn(async t => {
+g.test('if_no_error_scope_handles_an_error_it_fires_an_uncapturederror_event').fn(async (t) => {
   t.device.pushErrorScope('out-of-memory');
 
   const uncapturedErrorEvent = await t.expectUncapturedError(() => {
@@ -129,7 +129,7 @@ g.test('if_no_error_scope_handles_an_error_it_fires_an_uncapturederror_event').f
   t.expect(error === null);
 });
 
-g.test('push,popping_sibling_error_scopes_must_be_balanced').fn(async t => {
+g.test('push,popping_sibling_error_scopes_must_be_balanced').fn(async (t) => {
   {
     const promise = t.device.popErrorScope();
     t.shouldReject('OperationError', promise);
@@ -141,7 +141,7 @@ g.test('push,popping_sibling_error_scopes_must_be_balanced').fn(async t => {
     promises.push(t.device.popErrorScope());
   }
   const errors = await Promise.all(promises);
-  t.expect(errors.every(e => e === null));
+  t.expect(errors.every((e) => e === null));
 
   {
     const promise = t.device.popErrorScope();
@@ -149,7 +149,7 @@ g.test('push,popping_sibling_error_scopes_must_be_balanced').fn(async t => {
   }
 });
 
-g.test('push,popping_nested_error_scopes_must_be_balanced').fn(async t => {
+g.test('push,popping_nested_error_scopes_must_be_balanced').fn(async (t) => {
   {
     const promise = t.device.popErrorScope();
     t.shouldReject('OperationError', promise);
@@ -163,7 +163,7 @@ g.test('push,popping_nested_error_scopes_must_be_balanced').fn(async t => {
     promises.push(t.device.popErrorScope());
   }
   const errors = await Promise.all(promises);
-  t.expect(errors.every(e => e === null));
+  t.expect(errors.every((e) => e === null));
 
   {
     const promise = t.device.popErrorScope();

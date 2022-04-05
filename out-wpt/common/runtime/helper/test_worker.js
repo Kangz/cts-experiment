@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED - DO NOT EDIT. Source: https://github.com/gpuweb/cts
- **/ import { LogMessageWithStack } from '../../framework/logging/log_message.js';
+ **/ import { LogMessageWithStack } from '../../internal/logging/log_message.js';
 
 export class TestWorker {
   resolvers = new Map();
@@ -22,13 +22,13 @@ export class TestWorker {
       }
       this.resolvers.get(query)(result);
 
-      // TODO(kainino0x): update the Logger with this result (or don't have a logger and update the
-      // entire results JSON somehow at some point).
+      // MAINTENANCE_TODO(kainino0x): update the Logger with this result (or don't have a logger and
+      // update the entire results JSON somehow at some point).
     };
   }
 
-  async run(rec, query) {
-    this.worker.postMessage({ query, debug: this.debug });
+  async run(rec, query, expectations = []) {
+    this.worker.postMessage({ query, expectations, debug: this.debug });
     const workerResult = await new Promise(resolve => {
       this.resolvers.set(query, resolve);
     });

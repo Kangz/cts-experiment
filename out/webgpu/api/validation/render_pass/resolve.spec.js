@@ -30,7 +30,7 @@ Test various validation behaviors when a resolveTarget is provided.
 - resolve source and target have different sizes.
 `).
 
-params([
+paramsSimple([
 // control case should be valid
 { _valid: true },
 // a single sampled resolve source should cause a validation error.
@@ -73,7 +73,7 @@ params([
 { resolveTargetHeight: 4, _valid: false },
 { resolveTargetWidth: 4, _valid: false }]).
 
-fn(async t => {
+fn(async (t) => {
   const {
     colorAttachmentFormat = 'rgba8unorm',
     resolveTargetFormat = 'rgba8unorm',
@@ -107,7 +107,11 @@ fn(async t => {
         // Create the color attachment with resolve target with the configurable parameters.
         const resolveSourceColorAttachment = t.device.createTexture({
           format: colorAttachmentFormat,
-          size: { width: colorAttachmentWidth, height: colorAttachmentHeight, depth: 1 },
+          size: {
+            width: colorAttachmentWidth,
+            height: colorAttachmentHeight,
+            depthOrArrayLayers: 1 },
+
           sampleCount: colorAttachmentSamples,
           usage: GPUTextureUsage.COPY_SRC | GPUTextureUsage.RENDER_ATTACHMENT });
 
@@ -117,7 +121,8 @@ fn(async t => {
           size: {
             width: resolveTargetWidth,
             height: resolveTargetHeight,
-            depth: resolveTargetViewBaseArrayLayer + resolveTargetViewArrayLayerCount },
+            depthOrArrayLayers:
+            resolveTargetViewBaseArrayLayer + resolveTargetViewArrayLayerCount },
 
           sampleCount: resolveTargetSamples,
           mipLevelCount: resolveTargetViewBaseMipLevel + resolveTargetViewMipCount,
@@ -125,8 +130,9 @@ fn(async t => {
 
 
         renderPassColorAttachmentDescriptors.push({
-          attachment: resolveSourceColorAttachment.createView(),
-          loadValue: 'load',
+          view: resolveSourceColorAttachment.createView(),
+          loadOp: 'load',
+          storeOp: 'discard',
           resolveTarget: resolveTarget.createView({
             dimension: resolveTargetViewArrayLayerCount === 1 ? '2d' : '2d-array',
             mipLevelCount: resolveTargetViewMipCount,
@@ -140,7 +146,11 @@ fn(async t => {
         // and sample count must match the resolve source color attachment to be valid.
         const colorAttachment = t.device.createTexture({
           format: otherAttachmentFormat,
-          size: { width: colorAttachmentWidth, height: colorAttachmentHeight, depth: 1 },
+          size: {
+            width: colorAttachmentWidth,
+            height: colorAttachmentHeight,
+            depthOrArrayLayers: 1 },
+
           sampleCount: colorAttachmentSamples,
           usage: GPUTextureUsage.COPY_SRC | GPUTextureUsage.RENDER_ATTACHMENT });
 
@@ -150,15 +160,16 @@ fn(async t => {
           size: {
             width: colorAttachmentWidth,
             height: colorAttachmentHeight,
-            depth: 1 },
+            depthOrArrayLayers: 1 },
 
           sampleCount: 1,
           usage: GPUTextureUsage.COPY_SRC | GPUTextureUsage.RENDER_ATTACHMENT });
 
 
         renderPassColorAttachmentDescriptors.push({
-          attachment: colorAttachment.createView(),
-          loadValue: 'load',
+          view: colorAttachment.createView(),
+          loadOp: 'load',
+          storeOp: 'discard',
           resolveTarget: resolveTarget.createView() });
 
       }
@@ -167,7 +178,7 @@ fn(async t => {
     const pass = encoder.beginRenderPass({
       colorAttachments: renderPassColorAttachmentDescriptors });
 
-    pass.endPass();
+    pass.end();
 
     t.expectValidationError(() => {
       encoder.finish();

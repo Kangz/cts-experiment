@@ -3,14 +3,14 @@
 **/export const description = `
 Tests for getStackTrace.
 `;import { makeTestGroup } from '../common/framework/test_group.js';
-import { extractImportantStackTrace } from '../common/framework/util/stack.js';
+import { extractImportantStackTrace } from '../common/internal/stack.js';
 
 import { UnitTest } from './unit_test.js';
 
 export const g = makeTestGroup(UnitTest);
 
 g.test('stacks').
-params([
+paramsSimple([
 {
   case: 'node_fail',
   _expectedLines: 3,
@@ -21,7 +21,7 @@ params([
    at processTicksAndRejections (internal/process/task_queues.js:86:5)` },
 
 {
-  // TODO: make sure this test case actually matches what happens on windows
+  // MAINTENANCE_TODO: make sure this test case actually matches what happens on windows
   case: 'node_fail_backslash',
   _expectedLines: 3,
   _stack: `Error:
@@ -125,7 +125,7 @@ promiseReactionJob@[native code]` },
     at async http://localhost:8080/out/common/runtime/standalone.js:102:7` }]).
 
 
-fn(t => {
+fn((t) => {
   const ex = new Error();
   ex.stack = t.params._stack;
   t.expect(ex.stack === t.params._stack);

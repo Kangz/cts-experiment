@@ -1,12 +1,13 @@
 /**
 * AUTO-GENERATED - DO NOT EDIT. Source: https://github.com/gpuweb/cts
 **/ // Implements the standalone test runner (see also: /standalone/index.html).
-import { DefaultTestFileLoader } from '../framework/file_loader.js';import { Logger } from '../framework/logging/logger.js';
+import { setBaseResourcePath } from '../framework/resources.js';import { DefaultTestFileLoader } from '../internal/file_loader.js';
+import { Logger } from '../internal/logging/logger.js';
 
-import { parseQuery } from '../framework/query/parseQuery.js';
+import { parseQuery } from '../internal/query/parseQuery.js';
 
-
-import { assert } from '../framework/util/util.js';
+import { TestTree } from '../internal/tree.js';
+import { assert } from '../util/util.js';
 
 import { optionEnabled } from './helper/options.js';
 import { TestWorker } from './helper/test_worker.js';
@@ -21,11 +22,41 @@ let haveSomeResults = false;
 const runnow = optionEnabled('runnow');
 const debug = optionEnabled('debug');
 
-const logger = new Logger(debug);
+Logger.globalDebugMode = debug;
+const logger = new Logger();
+
+setBaseResourcePath('../out/resources');
 
 const worker = optionEnabled('worker') ? new TestWorker(debug) : undefined;
 
+const autoCloseOnPass = document.getElementById('autoCloseOnPass');
 const resultsVis = document.getElementById('resultsVis');
+
+
+
+
+
+
+
+
+
+
+function emptySubtreeResult() {
+  return { pass: 0, fail: 0, warn: 0, skip: 0, total: 0, timems: 0 };
+}
+
+function mergeSubtreeResults(...results) {
+  const target = emptySubtreeResult();
+  for (const result of results) {
+    target.pass += result.pass;
+    target.fail += result.fail;
+    target.warn += result.warn;
+    target.skip += result.skip;
+    target.total += result.total;
+    target.timems += result.timems;
+  }
+  return target;
+}
 
 
 
@@ -57,7 +88,7 @@ function makeTreeNodeHTML(tree, parentLevel) {
     subtree = makeCaseHTML(tree);
   }
 
-  const generateMyHTML = parentElement => {
+  const generateMyHTML = (parentElement) => {
     const div = $('<div>').appendTo(parentElement)[0];
     return subtree.generateSubtreeHTML(div);
   };
@@ -69,10 +100,15 @@ function makeCaseHTML(t) {
   let caseResult;
 
   // Becomes set once the DOM for this case exists.
+  let clearRenderedResult;
   let updateRenderedResult;
 
   const name = t.query.toString();
   const runSubtree = async () => {
+    if (clearRenderedResult) clearRenderedResult();
+
+    const result = emptySubtreeResult();
+
     haveSomeResults = true;
     const [rec, res] = logger.record(name);
     caseResult = res;
@@ -82,19 +118,44 @@ function makeCaseHTML(t) {
       await t.run(rec);
     }
 
+    result.total++;
+    result.timems += caseResult.timems;
+    switch (caseResult.status) {
+      case 'pass':
+        result.pass++;
+        break;
+      case 'fail':
+        result.fail++;
+        break;
+      case 'skip':
+        result.skip++;
+        break;
+      case 'warn':
+        result.warn++;
+        break;}
+
+
     if (updateRenderedResult) updateRenderedResult();
+
+    return result;
   };
 
-  const generateSubtreeHTML = div => {
+  const generateSubtreeHTML = (div) => {
     div.classList.add('testcase');
 
     const caselogs = $('<div>').addClass('testcaselogs').hide();
-    const [casehead, setChecked] = makeTreeNodeHeaderHTML(t, runSubtree, 2, checked => {
+    const [casehead, setChecked] = makeTreeNodeHeaderHTML(t, runSubtree, 2, (checked) => {
       checked ? caselogs.show() : caselogs.hide();
     });
     const casetime = $('<div>').addClass('testcasetime').html('ms').appendTo(casehead);
     div.appendChild(casehead);
     div.appendChild(caselogs[0]);
+
+    clearRenderedResult = () => {
+      div.removeAttribute('data-status');
+      casetime.text('ms');
+      caselogs.empty();
+    };
 
     updateRenderedResult = () => {
       if (caseResult) {
@@ -112,8 +173,7 @@ function makeCaseHTML(t) {
             attr('title', 'Log stack to console').
             appendTo(caselog).
             on('click', () => {
-
-              console.log(l);
+              consoleLogError(l);
             });
             $('<pre>').addClass('testcaselogtext').appendTo(caselog).text(l.toJSON());
           }
@@ -130,18 +190,30 @@ function makeCaseHTML(t) {
 }
 
 function makeSubtreeHTML(n, parentLevel) {
+  let subtreeResult = emptySubtreeResult();
+  // Becomes set once the DOM for this case exists.
+  let clearRenderedResult;
+  let updateRenderedResult;
+
   const { runSubtree, generateSubtreeHTML } = makeSubtreeChildrenHTML(
   n.children.values(),
   n.query.level);
 
 
-  const generateMyHTML = div => {
+  const runMySubtree = async () => {
+    if (clearRenderedResult) clearRenderedResult();
+    subtreeResult = await runSubtree();
+    if (updateRenderedResult) updateRenderedResult();
+    return subtreeResult;
+  };
+
+  const generateMyHTML = (div) => {
     const subtreeHTML = $('<div>').addClass('subtreechildren');
     const generateSubtree = memoize(() => generateSubtreeHTML(subtreeHTML[0]));
 
     // Hide subtree - it's not generated yet.
     subtreeHTML.hide();
-    const [header, setChecked] = makeTreeNodeHeaderHTML(n, runSubtree, parentLevel, checked => {
+    const [header, setChecked] = makeTreeNodeHeaderHTML(n, runMySubtree, parentLevel, (checked) => {
       if (checked) {
         // Make sure the subtree is generated and then show it.
         generateSubtree();
@@ -156,6 +228,26 @@ function makeSubtreeHTML(n, parentLevel) {
     div.appendChild(header);
     div.appendChild(subtreeHTML[0]);
 
+    clearRenderedResult = () => {
+      div.removeAttribute('data-status');
+    };
+
+    updateRenderedResult = () => {
+      let status = '';
+      if (subtreeResult.pass > 0) {
+        status += 'pass';
+      }
+      if (subtreeResult.fail > 0) {
+        status += 'fail';
+      }
+      div.setAttribute('data-status', status);
+      if (autoCloseOnPass.checked && status === 'pass') {
+        div.firstElementChild.removeAttribute('open');
+      }
+    };
+
+    updateRenderedResult();
+
     return () => {
       setChecked();
       const setChildrenChecked = generateSubtree();
@@ -163,21 +255,23 @@ function makeSubtreeHTML(n, parentLevel) {
     };
   };
 
-  return { runSubtree, generateSubtreeHTML: generateMyHTML };
+  return { runSubtree: runMySubtree, generateSubtreeHTML: generateMyHTML };
 }
 
 function makeSubtreeChildrenHTML(
 children,
 parentLevel)
 {
-  const childFns = Array.from(children, subtree => makeTreeNodeHTML(subtree, parentLevel));
+  const childFns = Array.from(children, (subtree) => makeTreeNodeHTML(subtree, parentLevel));
 
   const runMySubtree = async () => {
+    const results = [];
     for (const { runSubtree } of childFns) {
-      await runSubtree();
+      results.push(await runSubtree());
     }
+    return mergeSubtreeResults(...results);
   };
-  const generateMyHTML = div => {
+  const generateMyHTML = (div) => {
     const setChildrenChecked = Array.from(childFns, ({ generateSubtreeHTML }) =>
     generateSubtreeHTML(div));
 
@@ -192,6 +286,18 @@ parentLevel)
   return { runSubtree: runMySubtree, generateSubtreeHTML: generateMyHTML };
 }
 
+function consoleLogError(e) {
+  if (e === undefined) return;
+
+  globalThis._stack = e;
+
+  console.log('_stack =', e);
+  if ('extra' in e && e.extra !== undefined) {
+
+    console.log('_stack.extra =', e.extra);
+  }
+}
+
 function makeTreeNodeHeaderHTML(
 n,
 runSubtree,
@@ -199,27 +305,19 @@ parentLevel,
 onChange)
 {
   const isLeaf = ('run' in n);
-  const div = $('<div>').addClass('nodeheader');
+  const div = $('<details>').addClass('nodeheader');
+  const header = $('<summary>').appendTo(div);
 
   const setChecked = () => {
-    if (checkbox) {
-      checkbox.prop('checked', true); // (does not fire onChange)
-      onChange(true);
-    }
+    div.prop('open', true); // (does not fire onChange)
+    onChange(true);
   };
 
-  let checkbox;
   const href = `?${worker ? 'worker&' : ''}${debug ? 'debug&' : ''}q=${n.query.toString()}`;
   if (onChange) {
-    checkbox = $('<input>').
-    attr('type', 'checkbox').
-    addClass('collapsebtn').
-    on('change', function () {
-      onChange(this.checked);
-    }).
-    attr('alt', 'Expand').
-    attr('title', 'Expand').
-    appendTo(div);
+    div.on('toggle', function () {
+      onChange(this.open);
+    });
 
     // Expand the shallower parts of the tree at load.
     // Also expand completely within subtrees that are at the same query level
@@ -234,39 +332,47 @@ onChange)
   attr('alt', runtext).
   attr('title', runtext).
   on('click', async () => {
-    await runSubtree();
+    runSubtree();
   }).
-  appendTo(div);
+  appendTo(header);
   $('<a>').
   addClass('nodelink').
   attr('href', href).
   attr('alt', 'Open').
   attr('title', 'Open').
-  appendTo(div);
+  appendTo(header);
   if ('testCreationStack' in n && n.testCreationStack) {
     $('<button>').
     addClass('testcaselogbtn').
     attr('alt', 'Log test creation stack to console').
     attr('title', 'Log test creation stack to console').
-    appendTo(div).
+    appendTo(header).
     on('click', () => {
-
-      console.log(n.testCreationStack);
+      consoleLogError(n.testCreationStack);
     });
   }
-  const nodetitle = $('<div>').addClass('nodetitle').appendTo(div);
-  $('<input>').
-  attr('type', 'text').
-  prop('readonly', true).
-  addClass('nodequery').
-  val(n.query.toString()).
-  appendTo(nodetitle);
+  const nodetitle = $('<div>').addClass('nodetitle').appendTo(header);
+  const nodecolumns = $('<span>').addClass('nodecolumns').appendTo(nodetitle);
+  {
+    $('<input>').
+    attr('type', 'text').
+    prop('readonly', true).
+    addClass('nodequery').
+    val(n.query.toString()).
+    appendTo(nodecolumns);
+    if (n.subtreeCounts) {
+      $('<span>').
+      attr('title', '(Nodes with TODOs) / (Total test count)').
+      text(TestTree.countsToString(n)).
+      appendTo(nodecolumns);
+    }
+  }
   if ('description' in n && n.description) {
     nodetitle.append('&nbsp;');
     $('<pre>') //
     .addClass('nodedescription').
     text(n.description).
-    appendTo(nodetitle);
+    appendTo(header);
   }
   return [div[0], setChecked];
 }
@@ -277,7 +383,7 @@ let lastQueryLevelToExpand = 2;
 (async () => {
   const loader = new DefaultTestFileLoader();
 
-  // TODO: start populating page before waiting for everything to load?
+  // MAINTENANCE_TODO: start populating page before waiting for everything to load?
   const qs = new URLSearchParams(window.location.search).getAll('q');
   if (qs.length === 0) {
     qs.push('webgpu:*');
@@ -294,7 +400,7 @@ let lastQueryLevelToExpand = 2;
     ['debug', debug ? '1' : '0']]).
     toString() +
     '&' +
-    qs.map(q => 'q=' + q).join('&');
+    qs.map((q) => 'q=' + q).join('&');
     window.history.replaceState(null, '', url);
   }
 
@@ -303,9 +409,15 @@ let lastQueryLevelToExpand = 2;
   if (rootQuery.level > lastQueryLevelToExpand) {
     lastQueryLevelToExpand = rootQuery.level;
   }
+  loader.addEventListener('import', (ev) => {
+    $('#info')[0].textContent = `loading: ${ev.data.url}`;
+  });
+  loader.addEventListener('finish', () => {
+    $('#info')[0].textContent = '';
+  });
   const tree = await loader.loadTree(rootQuery);
 
-  tree.dissolveLevelBoundaries();
+  tree.dissolveSingleChildTrees();
 
   const { runSubtree, generateSubtreeHTML } = makeSubtreeHTML(tree.root, 1);
   const setTreeCheckedRecursively = generateSubtreeHTML(resultsVis);

@@ -1,22 +1,19 @@
-import { assert } from '../../../../../common/framework/util/util.js';
+import { assert } from '../../../../../common/util/util.js';
 import { GPUTest } from '../../../../gpu_test.js';
-import { mipSize } from '../../../../util/texture/subresource.js';
+import { virtualMipSize } from '../../../../util/texture/base.js';
 import { CheckContents } from '../texture_zero.spec.js';
 
 function makeFullscreenVertexModule(device: GPUDevice) {
   return device.createShaderModule({
     code: `
-    [[builtin(position)]] var<out> Position : vec4<f32>;
-    [[builtin(vertex_index)]] var<in> VertexIndex : i32;
-
-    [[stage(vertex)]]
-    fn main() -> void {
-      const pos : array<vec2<f32>, 3> = array<vec2<f32>, 3>(
+    @stage(vertex)
+    fn main(@builtin(vertex_index) VertexIndex : u32)
+         -> @builtin(position) vec4<f32> {
+      var pos : array<vec2<f32>, 3> = array<vec2<f32>, 3>(
         vec2<f32>(-1.0, -3.0),
         vec2<f32>( 3.0,  1.0),
         vec2<f32>(-1.0,  1.0));
-      Position = vec4<f32>(pos[VertexIndex], 0.0, 1.0);
-      return;
+      return vec4<f32>(pos[VertexIndex], 0.0, 1.0);
     }
     `,
   });
@@ -29,33 +26,36 @@ function getDepthTestEqualPipeline(
   expected: number
 ): GPURenderPipeline {
   return t.device.createRenderPipeline({
-    vertexStage: {
+    vertex: {
       entryPoint: 'main',
       module: makeFullscreenVertexModule(t.device),
     },
-    fragmentStage: {
+    fragment: {
       entryPoint: 'main',
       module: t.device.createShaderModule({
         code: `
-        [[builtin(frag_depth)]] var<out> FragDepth : f32;
-        [[location(0)]] var<out> outSuccess : f32;
+        struct Outputs {
+          @builtin(frag_depth) FragDepth : f32,
+          @location(0) outSuccess : f32,
+        };
 
-        [[stage(fragment)]]
-        fn main() -> void {
-          FragDepth = f32(${expected});
-          outSuccess = 1.0;
-          return;
+        @stage(fragment)
+        fn main() -> Outputs {
+          var output : Outputs;
+          output.FragDepth = f32(${expected});
+          output.outSuccess = 1.0;
+          return output;
         }
         `,
       }),
+      targets: [{ format: 'r8unorm' }],
     },
-    colorStates: [{ format: 'r8unorm' }],
-    depthStencilState: {
+    depthStencil: {
       format,
       depthCompare: 'equal',
     },
-    primitiveTopology: 'triangle-list',
-    sampleCount,
+    primitive: { topology: 'triangle-list' },
+    multisample: { count: sampleCount },
   });
 }
 
@@ -65,36 +65,29 @@ function getStencilTestEqualPipeline(
   sampleCount: number
 ): GPURenderPipeline {
   return t.device.createRenderPipeline({
-    vertexStage: {
+    vertex: {
       entryPoint: 'main',
       module: makeFullscreenVertexModule(t.device),
     },
-    fragmentStage: {
+    fragment: {
       entryPoint: 'main',
       module: t.device.createShaderModule({
         code: `
-        [[location(0)]] var<out> outSuccess : f32;
-
-        [[stage(fragment)]]
-        fn main() -> void {
-          outSuccess = 1.0;
-          return;
+        @stage(fragment)
+        fn main() -> @location(0) f32 {
+          return 1.0;
         }
         `,
       }),
+      targets: [{ format: 'r8unorm' }],
     },
-    colorStates: [
-      {
-        format: 'r8unorm',
-      },
-    ],
-    depthStencilState: {
+    depthStencil: {
       format,
       stencilFront: { compare: 'equal' },
       stencilBack: { compare: 'equal' },
     },
-    primitiveTopology: 'triangle-list',
-    sampleCount,
+    primitive: { topology: 'triangle-list' },
+    multisample: { count: sampleCount },
   });
 }
 
@@ -106,12 +99,17 @@ const checkContents: (type: 'depth' | 'stencil', ...args: Parameters<CheckConten
   state,
   subresourceRange
 ) => {
+  assert(params.dimension === '2d');
   for (const viewDescriptor of t.generateTextureViewDescriptorsForRendering(
     params.aspect,
     subresourceRange
   )) {
     assert(viewDescriptor.baseMipLevel !== undefined);
-    const [width, height] = mipSize([t.textureWidth, t.textureHeight], viewDescriptor.baseMipLevel);
+    const [width, height] = virtualMipSize(
+      params.dimension,
+      [t.textureWidth, t.textureHeight, 1],
+      viewDescriptor.baseMipLevel
+    );
 
     const renderTexture = t.device.createTexture({
       size: [width, height, 1],
@@ -135,18 +133,19 @@ const checkContents: (type: 'depth' | 'stencil', ...args: Parameters<CheckConten
     const pass = commandEncoder.beginRenderPass({
       colorAttachments: [
         {
-          attachment: renderTexture.createView(),
+          view: renderTexture.createView(),
           resolveTarget,
-          loadValue: [0, 0, 0, 0],
+          clearValue: [0, 0, 0, 0],
+          loadOp: 'load',
           storeOp: 'store',
         },
       ],
       depthStencilAttachment: {
-        attachment: texture.createView(viewDescriptor),
+        view: texture.createView(viewDescriptor),
         depthStoreOp: 'store',
-        depthLoadValue: 'load',
+        depthLoadOp: 'load',
         stencilStoreOp: 'store',
-        stencilLoadValue: 'load',
+        stencilLoadOp: 'load',
       },
     });
 
@@ -172,7 +171,7 @@ const checkContents: (type: 'depth' | 'stencil', ...args: Parameters<CheckConten
     }
 
     pass.draw(3);
-    pass.endPass();
+    pass.end();
 
     t.queue.submit([commandEncoder.finish()]);
 
