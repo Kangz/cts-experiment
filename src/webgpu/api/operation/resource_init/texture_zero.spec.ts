@@ -302,6 +302,7 @@ export class TextureZeroInitTest extends GPUTest {
       this.p.aspect,
       subresourceRange
     )) {
+      commandEncoder.pushDebugGroup('aa');
       if (kTextureFormatInfo[this.p.format].color) {
         commandEncoder
           .beginRenderPass({
@@ -319,12 +320,12 @@ export class TextureZeroInitTest extends GPUTest {
         const depthStencilAttachment: GPURenderPassDepthStencilAttachment = {
           view: texture.createView(viewDescriptor),
         };
-        if (kTextureFormatInfo[this.p.format].depth) {
+        if (kTextureFormatInfo[this.p.format].depth && this.p.aspect !== 'stencil-only') {
           depthStencilAttachment.depthClearValue = initializedStateAsDepth[state];
           depthStencilAttachment.depthLoadOp = 'clear';
           depthStencilAttachment.depthStoreOp = 'store';
         }
-        if (kTextureFormatInfo[this.p.format].stencil) {
+        if (kTextureFormatInfo[this.p.format].stencil && this.p.aspect !== 'depth-only') {
           depthStencilAttachment.stencilClearValue = initializedStateAsStencil[state];
           depthStencilAttachment.stencilLoadOp = 'clear';
           depthStencilAttachment.stencilStoreOp = 'store';
@@ -336,6 +337,7 @@ export class TextureZeroInitTest extends GPUTest {
           })
           .end();
       }
+      commandEncoder.popDebugGroup();
     }
     this.queue.submit([commandEncoder.finish()]);
   }
@@ -412,6 +414,7 @@ export class TextureZeroInitTest extends GPUTest {
       this.p.aspect,
       subresourceRange
     )) {
+      commandEncoder.pushDebugGroup('aaa');
       if (kTextureFormatInfo[this.p.format].color) {
         commandEncoder
           .beginRenderPass({
@@ -428,11 +431,11 @@ export class TextureZeroInitTest extends GPUTest {
         const depthStencilAttachment: GPURenderPassDepthStencilAttachment = {
           view: texture.createView(desc),
         };
-        if (kTextureFormatInfo[this.p.format].depth) {
+        if (kTextureFormatInfo[this.p.format].depth && this.p.aspect !== 'stencil-only') {
           depthStencilAttachment.depthLoadOp = 'load';
           depthStencilAttachment.depthStoreOp = 'discard';
         }
-        if (kTextureFormatInfo[this.p.format].stencil) {
+        if (kTextureFormatInfo[this.p.format].stencil && this.p.aspect !== 'depth-only') {
           depthStencilAttachment.stencilLoadOp = 'load';
           depthStencilAttachment.stencilStoreOp = 'discard';
         }
@@ -443,6 +446,7 @@ export class TextureZeroInitTest extends GPUTest {
           })
           .end();
       }
+      commandEncoder.popDebugGroup();
     }
     this.queue.submit([commandEncoder.finish()]);
   }

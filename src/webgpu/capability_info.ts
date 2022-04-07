@@ -119,10 +119,10 @@ const kRegularTextureFormatInfo = /* prettier-ignore */ makeTable(
 /* prettier-ignore */
 const kTexFmtInfoHeader =  ['renderable', 'multisample', 'resolve', 'color', 'depth', 'stencil', 'storage', 'copySrc', 'copyDst', 'sampleType', 'bytesPerBlock', 'blockWidth', 'blockHeight',                'feature', 'baseFormat'] as const;
 const kSizedDepthStencilFormatInfo = /* prettier-ignore */ makeTable(kTexFmtInfoHeader,
-                           [        true,          true,     false,   false,        ,          ,     false,     false,     false,             ,                ,            1,             1,                         ,   undefined ] as const, {
-  'depth32float':          [            ,              ,          ,        ,    true,     false,          ,          ,          ,      'depth',               4],
-  'depth16unorm':          [            ,              ,          ,        ,    true,     false,          ,          ,          ,      'depth',               2],
-  'stencil8':              [            ,              ,          ,        ,   false,      true,          ,          ,          ,       'uint',               1],
+                           [        true,          true,     false,   false,        ,          ,     false,          ,          ,             ,                ,            1,             1,                         ,   undefined ] as const, {
+  'depth32float':          [            ,              ,          ,        ,    true,     false,          ,      true,     false,      'depth',               4],
+  'depth16unorm':          [            ,              ,          ,        ,    true,     false,          ,      true,      true,      'depth',               2],
+  'stencil8':              [            ,              ,          ,        ,   false,      true,          ,      true,      true,       'uint',               1],
 } as const);
 
 // Multi aspect sample type are now set to their first aspect

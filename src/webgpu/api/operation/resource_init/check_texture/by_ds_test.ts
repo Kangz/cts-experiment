@@ -1,4 +1,8 @@
 import { assert } from '../../../../../common/util/util.js';
+import {
+  DepthStencilFormat,
+  kDepthStencilFormatResolvedAspect,
+} from '../../../../capability_info.js';
 import { GPUTest } from '../../../../gpu_test.js';
 import { virtualMipSize } from '../../../../util/texture/base.js';
 import { CheckContents } from '../texture_zero.spec.js';
@@ -130,6 +134,7 @@ const checkContents: (type: 'depth' | 'stencil', ...args: Parameters<CheckConten
     }
 
     const commandEncoder = t.device.createCommandEncoder();
+    commandEncoder.pushDebugGroup('a');
     const pass = commandEncoder.beginRenderPass({
       colorAttachments: [
         {
@@ -142,20 +147,23 @@ const checkContents: (type: 'depth' | 'stencil', ...args: Parameters<CheckConten
       ],
       depthStencilAttachment: {
         view: texture.createView(viewDescriptor),
-        depthStoreOp: 'store',
-        depthLoadOp: 'load',
-        stencilStoreOp: 'store',
-        stencilLoadOp: 'load',
+        depthStoreOp: type === 'depth' ? 'store' : undefined,
+        depthLoadOp: type === 'depth' ? 'load' : undefined,
+        stencilStoreOp: type === 'stencil' ? 'store' : undefined,
+        stencilLoadOp: type === 'stencil' ? 'load' : undefined,
       },
     });
 
+    const pipelineDSFormat = kDepthStencilFormatResolvedAspect[params.format as DepthStencilFormat][
+      params.aspect
+    ]!;
     switch (type) {
       case 'depth': {
         const expectedDepth = t.stateToTexelComponents[state].Depth;
         assert(expectedDepth !== undefined);
 
         pass.setPipeline(
-          getDepthTestEqualPipeline(t, params.format, params.sampleCount, expectedDepth)
+          getDepthTestEqualPipeline(t, pipelineDSFormat, params.sampleCount, expectedDepth)
         );
         break;
       }
@@ -164,7 +172,7 @@ const checkContents: (type: 'depth' | 'stencil', ...args: Parameters<CheckConten
         const expectedStencil = t.stateToTexelComponents[state].Stencil;
         assert(expectedStencil !== undefined);
 
-        pass.setPipeline(getStencilTestEqualPipeline(t, params.format, params.sampleCount));
+        pass.setPipeline(getStencilTestEqualPipeline(t, pipelineDSFormat, params.sampleCount));
         pass.setStencilReference(expectedStencil);
         break;
       }
@@ -172,6 +180,7 @@ const checkContents: (type: 'depth' | 'stencil', ...args: Parameters<CheckConten
 
     pass.draw(3);
     pass.end();
+    commandEncoder.popDebugGroup();
 
     t.queue.submit([commandEncoder.finish()]);
 

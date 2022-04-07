@@ -13,6 +13,8 @@ import {
   SizedTextureFormat,
   kTextureFormatInfo,
   kQueryTypeInfo,
+  kDepthStencilFormatResolvedAspect,
+  DepthStencilFormat,
 } from './capability_info.js';
 import { makeBufferWithContents } from './util/buffer.js';
 import {
@@ -544,7 +546,7 @@ export class GPUTest extends Fixture {
    */
   expectSingleColor(
     src: GPUTexture,
-    format: EncodableTextureFormat,
+    format: GPUTextureFormat,
     {
       size,
       exp,
@@ -565,7 +567,14 @@ export class GPUTest extends Fixture {
       size,
       layout
     );
-    const rep = kTexelRepresentationInfo[format];
+
+    let aspectFormat = format;
+    if (kTextureFormatInfo[format].depth || kTextureFormatInfo[format].stencil) {
+      aspectFormat = kDepthStencilFormatResolvedAspect[format as DepthStencilFormat][
+        layout?.aspect ?? 'all'
+      ]!;
+    }
+    const rep = kTexelRepresentationInfo[aspectFormat as EncodableTextureFormat];
     const expectedTexelData = rep.pack(rep.encode(exp));
 
     const buffer = this.device.createBuffer({
@@ -576,7 +585,12 @@ export class GPUTest extends Fixture {
 
     const commandEncoder = this.device.createCommandEncoder();
     commandEncoder.copyTextureToBuffer(
-      { texture: src, mipLevel: layout?.mipLevel, origin: { x: 0, y: 0, z: slice } },
+      {
+        texture: src,
+        mipLevel: layout?.mipLevel,
+        origin: { x: 0, y: 0, z: slice },
+        aspect: layout?.aspect,
+      },
       { buffer, bytesPerRow, rowsPerImage },
       mipSize
     );
